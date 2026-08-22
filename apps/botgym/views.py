@@ -9,7 +9,7 @@ from .serializers import MensajeSerializer
 
 
 class BotGymView(APIView):
-
+    serializer_class = MensajeSerializer
     def post(self, request):
         # 1. Se valida lo q manda el usuario
         serializer = MensajeSerializer(data=request.data)
