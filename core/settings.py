@@ -13,6 +13,7 @@ import os
 import dj_database_url
 from dotenv import load_dotenv
 from pathlib import Path
+from datetime import timedelta
 
 load_dotenv()
 
@@ -127,6 +128,12 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 5,
 
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# Configuración para la duracion del token, en este caso 15 minutos
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # El token de acceso expira en 15 minutos
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),     # El token de refresco dura 1 día (puedes cambiarlo)
 }
 
 # Configuración de la documentación (Swagger/Redoc)
