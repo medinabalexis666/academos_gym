@@ -76,8 +76,6 @@ class BotGymView(APIView):
             headers = {"Content-Type": "application/json"}
             model = os.getenv('OLLAMA_MODEL')
 
-        #print(f"+++ PROVEEDOR DETECTADO: {provider}")
-        #print(f"+++ URL OLLAMA DETECTADA: {os.getenv('OLLAMA_URL')}")
         payload = {
             "model": model,
             "messages": historial_formateado
@@ -91,8 +89,6 @@ class BotGymView(APIView):
             texto_ia = data['choices'][0]['message']['content']
             
         except requests.exceptions.HTTPError as e:
-            # ESTO ES NUEVO: Imprimir lo que Groq nos respondió en el cuerpo del error
-            print(f"+++ CUERPO DEL ERROR DE GROQ: {e.response.text}")
             texto_ia = f"Error con el servidor de IA: {str(e)}"
             
         except Exception as e:
