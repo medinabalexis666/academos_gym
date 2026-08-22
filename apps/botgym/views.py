@@ -5,6 +5,8 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import ListAPIView, RetrieveAPIView  # ← AGREGAR
+from django.utils import timezone
+from datetime import timedelta
 from .models import Mensaje, Conversacion
 from .serializers import (
     MensajeSerializer,
@@ -33,8 +35,8 @@ class BotGymView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Obtener o crear la conversación
         if conversacion_id:
+            # Caso 1: Me envían un ID explícito (frontend lo guardó)
             try:
                 conversacion = Conversacion.objects.get(id=conversacion_id, usuario=usuario)
             except Conversacion.DoesNotExist:
@@ -43,11 +45,23 @@ class BotGymView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
         else:
-            titulo = texto_usuario[:50] + "..." if len(texto_usuario) > 50 else texto_usuario
-            conversacion = Conversacion.objects.create(
+            # Caso 2: No envían ID → buscar sesión activa (últimos 30 min)
+            hace_30_min = timezone.now() - timedelta(minutes=30)
+            conversacion_activa = Conversacion.objects.filter(
                 usuario=usuario,
-                titulo=titulo
-            )
+                updated_at__gte=hace_30_min
+            ).order_by('-updated_at').first()
+
+            if conversacion_activa:
+                # Continuar la conversación existente
+                conversacion = conversacion_activa
+            else:
+                # No hay sesión activa → crear nueva
+                titulo = texto_usuario[:50] + "..." if len(texto_usuario) > 50 else texto_usuario
+                conversacion = Conversacion.objects.create(
+                    usuario=usuario,
+                    titulo=titulo
+                )
 
         # Guardar mensaje del usuario
         Mensaje.objects.create(
