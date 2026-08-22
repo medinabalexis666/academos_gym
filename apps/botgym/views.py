@@ -86,12 +86,25 @@ class BotGymView(APIView):
         # 6. Hablar con la IA
         try:
             respuesta_ia = requests.post(url, json=payload, headers=headers, timeout=180)
+            respuesta_ia.raise_for_status() # Si hay error 404, salta al except de abajo
+            data = respuesta_ia.json()
+            texto_ia = data['choices'][0]['message']['content']
+            
+        except requests.exceptions.HTTPError as e:
+            # ESTO ES NUEVO: Imprimir lo que Groq nos respondió en el cuerpo del error
+            print(f"+++ CUERPO DEL ERROR DE GROQ: {e.response.text}")
+            texto_ia = f"Error con el servidor de IA: {str(e)}"
+            
+        except Exception as e:
+            texto_ia = f"Error general de conexión: {str(e)}"
+        '''try:
+            respuesta_ia = requests.post(url, json=payload, headers=headers, timeout=180)
             respuesta_ia.raise_for_status() # Si hay error de conexión, explota aquí
             data = respuesta_ia.json()
             texto_ia = data['choices'][0]['message']['content']
         except Exception as e:
             texto_ia = f"Lo siento, mi cerebro está desconectado. Error: {str(e)}"
-
+        '''
         # 7. Guardar la respuesta de la IA en la BD (Para la próxima vez)
         Mensaje.objects.create(usuario=usuario, rol='assistant', contenido=texto_ia)
 
