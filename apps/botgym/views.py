@@ -4,37 +4,97 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from .models import Mensaje
-from .serializers import MensajeSerializer
+from rest_framework.generics import ListAPIView, RetrieveAPIView  # ← AGREGAR
+from .models import Mensaje, Conversacion
+from .serializers import (
+    MensajeSerializer,
+    ConversacionListSerializer,
+    ConversacionDetailSerializer
+)
 
 
 class BotGymView(APIView):
     serializer_class = MensajeSerializer
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # 1. Se valida lo q manda el usuario
+
+        # 1. Validar lo que manda el usuario
         serializer = MensajeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         texto_usuario = serializer.validated_data['mensaje']
+        conversacion_id = serializer.validated_data.get('conversacion_id')
         usuario = request.user
 
-        # 2. Se guarda el mensaje del usuario en la BD
-        Mensaje.objects.create(usuario=usuario, rol='user', contenido=texto_usuario)
+        # Verificar que el usuario ES un socio
+        if not hasattr(usuario, 'socio') or usuario.socio is None:
+            return Response(
+                {"error": "Acceso denegado. Su usuario no está registrado como socio del gimnasio."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-        # 3. Recuperamos el historial reciente (Ej: últimos 10 mensajes)
-        historial_bd = Mensaje.objects.filter(usuario=usuario).order_by('-timestamp')[:10]
+        # Obtener o crear la conversación
+        if conversacion_id:
+            try:
+                conversacion = Conversacion.objects.get(id=conversacion_id, usuario=usuario)
+            except Conversacion.DoesNotExist:
+                return Response(
+                    {"error": "Conversación no encontrada."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            titulo = texto_usuario[:50] + "..." if len(texto_usuario) > 50 else texto_usuario
+            conversacion = Conversacion.objects.create(
+                usuario=usuario,
+                titulo=titulo
+            )
+
+        # Guardar mensaje del usuario
+        Mensaje.objects.create(
+            usuario=usuario,
+            rol='user',
+            contenido=texto_usuario,
+            conversacion=conversacion
+        )
+
+        # Historial de ESTA conversación
+        historial_bd = Mensaje.objects.filter(
+            conversacion=conversacion
+        ).order_by('timestamp')[:10]
         
-        # Formateamos al estándar que exigen las IAs: [{"role": "user", "content": "..."}]
         historial_formateado = [
             {"role": msg.rol, "content": msg.contenido} 
-            for msg in reversed(historial_bd) # Revertimos para que esté en orden cronológico
+            for msg in historial_bd
         ]
 
-        # 4. Colocamos el RAG (Contexto propio del gimnasio) en el Prompt de Sistema
+        # Prompt de sistema
+        # Obtener datos del socio
+        socio = usuario.socio
+        datos_socio = f"""
+        - Nombre: {socio.nombre} {socio.apellido}
+        - Email: {socio.email}
+        - Edad: {socio.edad} años
+        - Género: {socio.get_genero_display()}"""
+
+        # Agregar campos opcionales solo si tienen valor
+        if socio.peso:
+            datos_socio += f"\n- Peso: {socio.peso} kg"
+        if socio.altura:
+            datos_socio += f"\n- Altura: {socio.altura} cm"
+        if socio.objetivo:
+            datos_socio += f"\n- Objetivo: {socio.get_objetivo_display()}"
+        if socio.nivel_actividad:
+            datos_socio += f"\n- Nivel de actividad: {socio.get_nivel_actividad_display()}"
+        if socio.condiciones_medicas:
+            datos_socio += f"\n- Condiciones médicas: {socio.condiciones_medicas}"
+
         prompt_sistema = {
             "role": "system", 
-            "content": """
-            Eres 'BotGym', asistente del gimnasio Academos. Sé muy breve (máximo 2 frases).
+            "content": f"""
+            Eres 'BotGym', asistente del gimnasio Academos. Sé muy breve (máximo 3 frases).
+
+            --- DATOS DEL SOCIO QUE HABLA CONTIGO ---
+            {datos_socio}
 
             --- BASE DE CONOCIMIENTO DEL GIMNASIO (RAG) ---
             Horarios:
@@ -52,13 +112,17 @@ class BotGymView(APIView):
             
             REGLAS ESTRICTAS:
             1. Si preguntan por HORARIOS o PRECIOS, usa SOLO la info de arriba. NUNCA inventes.
-            2. Si preguntan sobre rutinas, usa tu conocimiento general.
-            3. Responde SIEMPRE en español.
+            2. SIEMPRE saluda al socio por su NOMBRE al inicio de tu respuesta.
+            3. Usa los DATOS DEL SOCIO (edad, peso, objetivo, nivel) para personalizar.
+            4. Si tiene condiciones médicas, TEN CUIDADO al recomendar ejercicios.
+            5. Si pregunta por rutinas, adapta a su OBJETIVO y NIVEL DE ACTIVIDAD.
+            6. Responde SIEMPRE en español.
             """
         }
+
         historial_formateado.insert(0, prompt_sistema)
 
-        # 5. Configuramos la petición según el entorno (Ollama o Groq)
+        # Configurar petición según entorno
         provider = os.getenv('AI_PROVIDER')
         if provider == 'groq':
             url = os.getenv('GROQ_URL')
@@ -67,11 +131,7 @@ class BotGymView(APIView):
                 "Content-Type": "application/json"
             }
             model = os.getenv('GROQ_MODEL')
-            # AGREGA ESTAS DOS LÍNEAS PARA DEPURAR:
-            print(f"+++ DEPURANDO URL: {url}")
-            print(f"+++ DEPURANDO KEY (Primeros 10 chars): {os.getenv('GROQ_API_KEY')[:10]}")
-
-        else: # Por defecto se usa Ollama
+        else:
             url = os.getenv('OLLAMA_URL')
             headers = {"Content-Type": "application/json"}
             model = os.getenv('OLLAMA_MODEL')
@@ -81,28 +141,45 @@ class BotGymView(APIView):
             "messages": historial_formateado
         }
 
-        # 6. Hablar con la IA
+        # Hablar con la IA
         try:
             respuesta_ia = requests.post(url, json=payload, headers=headers, timeout=180)
-            respuesta_ia.raise_for_status() # Si hay error 404, salta al except de abajo
+            respuesta_ia.raise_for_status()
             data = respuesta_ia.json()
             texto_ia = data['choices'][0]['message']['content']
             
         except requests.exceptions.HTTPError as e:
             texto_ia = f"Error con el servidor de IA: {str(e)}"
-            
         except Exception as e:
             texto_ia = f"Error general de conexión: {str(e)}"
-        '''try:
-            respuesta_ia = requests.post(url, json=payload, headers=headers, timeout=180)
-            respuesta_ia.raise_for_status() # Si hay error de conexión, explota aquí
-            data = respuesta_ia.json()
-            texto_ia = data['choices'][0]['message']['content']
-        except Exception as e:
-            texto_ia = f"Lo siento, mi cerebro está desconectado. Error: {str(e)}"
-        '''
-        # 7. Guardar la respuesta de la IA en la BD (Para la próxima vez)
-        Mensaje.objects.create(usuario=usuario, rol='assistant', contenido=texto_ia)
 
-        # 8. Devolver al usuario
-        return Response({"respuesta": texto_ia}, status=status.HTTP_200_OK)
+        # Guardar respuesta de la IA
+        Mensaje.objects.create(
+            usuario=usuario,
+            rol='assistant',
+            contenido=texto_ia,
+            conversacion=conversacion
+        )
+
+        return Response({
+            "respuesta": texto_ia,
+            "conversacion_id": str(conversacion.id)
+        }, status=status.HTTP_200_OK)
+
+
+class MisConversacionesView(ListAPIView):
+    """Lista las conversaciones del socio autenticado"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = ConversacionListSerializer
+
+    def get_queryset(self):
+        return Conversacion.objects.filter(usuario=self.request.user).order_by('-updated_at')
+
+
+class DetalleConversacionView(RetrieveAPIView):
+    """Ver los mensajes de una conversación específica"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = ConversacionDetailSerializer
+
+    def get_queryset(self):
+        return Conversacion.objects.filter(usuario=self.request.user)

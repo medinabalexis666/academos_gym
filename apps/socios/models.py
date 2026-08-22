@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.conf import settings
 
 class Socio(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -16,6 +17,61 @@ class Socio(models.Model):
     genero = models.CharField(max_length=1, choices=GENERO_CHOICES)
     email = models.EmailField(unique=True) 
     fecha_registro = models.DateTimeField(auto_now_add=True) 
+
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,  # Si borran el user, el socio sigue existiendo
+        null=True,
+        blank=True,
+        related_name='socio'
+    )
+
+    peso = models.FloatField(
+        null=True, 
+        blank=True,
+        help_text="Peso en kg"
+    )
+    altura = models.FloatField(
+        null=True, 
+        blank=True,
+        help_text="Altura en cm"
+    )
+    
+    OBJETIVO_CHOICES = [
+        ('ganar_musculo', 'Ganar masa muscular'),
+        ('perder_peso', 'Perder grasa'),
+        ('mantenerse', 'Mantenimiento'),
+        ('resistencia', 'Mejorar resistencia'),
+        ('flexibilidad', 'Mejorar flexibilidad'),
+        ('salud', 'Salud general'),
+    ]
+    objetivo = models.CharField(
+        max_length=20, 
+        choices=OBJETIVO_CHOICES,
+        null=True,
+        blank=True
+    )
+    
+    NIVEL_CHOICES = [
+        ('sedentario', 'Sedentario (poco o nada de ejercicio)'),
+        ('principiante', 'Principiante (< 6 meses)'),
+        ('intermedio', 'Intermedio (6 meses - 2 años)'),
+        ('avanzado', 'Avanzado (> 2 años)'),
+    ]
+    nivel_actividad = models.CharField(
+        max_length=15,
+        choices=NIVEL_CHOICES,
+        null=True,
+        blank=True,
+        default='principiante'
+    )
+    
+    condiciones_medicas = models.TextField(
+        blank=True,
+        default='',
+        help_text="Lesiones, condiciones médicas, alergias, etc."
+    )
+
 
     def __str__(self):
         return f"{self.nombre} {self.apellido} {self.email}"
