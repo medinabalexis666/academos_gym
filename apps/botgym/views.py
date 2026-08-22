@@ -10,6 +10,7 @@ from .serializers import MensajeSerializer
 
 class BotGymView(APIView):
     serializer_class = MensajeSerializer
+
     def post(self, request):
         # 1. Se valida lo q manda el usuario
         serializer = MensajeSerializer(data=request.data)
@@ -66,6 +67,10 @@ class BotGymView(APIView):
                 "Content-Type": "application/json"
             }
             model = os.getenv('GROQ_MODEL')
+            # AGREGA ESTAS DOS LÍNEAS PARA DEPURAR:
+            print(f"+++ DEPURANDO URL: {url}")
+            print(f"+++ DEPURANDO KEY (Primeros 10 chars): {os.getenv('GROQ_API_KEY')[:10]}")
+
         else: # Por defecto se usa Ollama
             url = os.getenv('OLLAMA_URL')
             headers = {"Content-Type": "application/json"}
