@@ -6,6 +6,7 @@ from .serializers import SocioSerializer
 class SocioViewSet(viewsets.ModelViewSet):
     queryset = Socio.objects.all().order_by('-fecha_registro')
     serializer_class = SocioSerializer
+    
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:

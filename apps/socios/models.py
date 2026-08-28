@@ -1,6 +1,5 @@
 import uuid
 from django.db import models
-from django.conf import settings
 
 class Socio(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -17,14 +16,6 @@ class Socio(models.Model):
     genero = models.CharField(max_length=1, choices=GENERO_CHOICES)
     email = models.EmailField(unique=True) 
     fecha_registro = models.DateTimeField(auto_now_add=True) 
-
-    usuario = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,  # Si borran el user, el socio sigue existiendo
-        null=True,
-        blank=True,
-        related_name='socio'
-    )
 
     peso = models.FloatField(
         null=True, 
