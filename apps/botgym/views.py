@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.generics import ListAPIView, RetrieveAPIView  # ← AGREGAR
+from rest_framework.generics import ListAPIView, RetrieveAPIView
 from django.utils import timezone
 from datetime import timedelta
 from .models import Mensaje, Conversacion
@@ -28,15 +28,11 @@ class BotGymView(APIView):
         conversacion_id = serializer.validated_data.get('conversacion_id')
         usuario = request.user
 
-        # Verificar que el usuario ES un socio
-        if not hasattr(usuario, 'socio') or usuario.socio is None:
-            return Response(
-                {"error": "Acceso denegado. Su usuario no está registrado como socio del gimnasio."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
+        '''
+        Se controla la creacion o continuacion de la conversion, la cual tiene una
+        duracion de 30 minutos.
+        '''
         if conversacion_id:
-            # Caso 1: Me envían un ID explícito (frontend lo guardó)
             try:
                 conversacion = Conversacion.objects.get(id=conversacion_id, usuario=usuario)
             except Conversacion.DoesNotExist:
@@ -45,7 +41,6 @@ class BotGymView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
         else:
-            # Caso 2: No envían ID → buscar sesión activa (últimos 30 min)
             hace_30_min = timezone.now() - timedelta(minutes=30)
             conversacion_activa = Conversacion.objects.filter(
                 usuario=usuario,
@@ -70,44 +65,43 @@ class BotGymView(APIView):
             contenido=texto_usuario,
             conversacion=conversacion
         )
+        conversacion.save() 
 
-        # Historial de ESTA conversación
+        # Historial de esta conversación
         historial_bd = Mensaje.objects.filter(
             conversacion=conversacion
         ).order_by('timestamp')[:10]
-        
+
         historial_formateado = [
-            {"role": msg.rol, "content": msg.contenido} 
+            {"role": msg.rol, "content": msg.contenido}
             for msg in historial_bd
         ]
 
-        # Prompt de sistema
-        # Obtener datos del socio
-        socio = usuario.socio
-        datos_socio = f"""
-        - Nombre: {socio.nombre} {socio.apellido}
-        - Email: {socio.email}
-        - Edad: {socio.edad} años
-        - Género: {socio.get_genero_display()}"""
-
-        # Agregar campos opcionales solo si tienen valor
-        if socio.peso:
-            datos_socio += f"\n- Peso: {socio.peso} kg"
-        if socio.altura:
-            datos_socio += f"\n- Altura: {socio.altura} cm"
-        if socio.objetivo:
-            datos_socio += f"\n- Objetivo: {socio.get_objetivo_display()}"
-        if socio.nivel_actividad:
-            datos_socio += f"\n- Nivel de actividad: {socio.get_nivel_actividad_display()}"
-        if socio.condiciones_medicas:
-            datos_socio += f"\n- Condiciones médicas: {socio.condiciones_medicas}"
+        datos_socio = ""
+        if hasattr(usuario, 'socio'):
+            socio = usuario.socio
+            datos_socio = f"""
+            --- DATOS DEL SOCIO QUE HABLA CONTIGO ---
+            - Nombre: {socio.nombre} {socio.apellido}
+            - Email: {socio.email}
+            - Edad: {socio.edad} años
+            - Género: {socio.get_genero_display()}"""
+            if socio.peso:
+                datos_socio += f"\n- Peso: {socio.peso} kg"
+            if socio.altura:
+                datos_socio += f"\n- Altura: {socio.altura} cm"
+            if socio.objetivo:
+                datos_socio += f"\n- Objetivo: {socio.get_objetivo_display()}"
+            if socio.nivel_actividad:
+                datos_socio += f"\n- Nivel: {socio.get_nivel_actividad_display()}"
+            if socio.condiciones_medicas:
+                datos_socio += f"\n- Condiciones médicas: {socio.condiciones_medicas}"
 
         prompt_sistema = {
-            "role": "system", 
+            "role": "system",
             "content": f"""
             Eres 'BotGym', asistente del gimnasio Academos. Sé muy breve (máximo 3 frases).
 
-            --- DATOS DEL SOCIO QUE HABLA CONTIGO ---
             {datos_socio}
 
             --- BASE DE CONOCIMIENTO DEL GIMNASIO (RAG) ---
@@ -120,6 +114,66 @@ class BotGymView(APIView):
             - Básica: $30 USD
             - Premium (con clases): $50 USD
             - VIP (Personalizado): $70 USD
+
+            --- EJERCICIOS O RUTINAS TRADICIONALES DE GIMNASIO POR GRUPO MUSCULAR ----
+
+            [PECHO / CHEST]
+            - Press de banca plano con barra o mancuernas
+            - Press inclinado con mancuernas
+            - Aperturas en polea o máquina (Cruces de polea)
+            - Fondos en paralelas
+
+            [ESPALDA / BACK]
+            - Dominadas o Jalón al pecho en polea
+            - Remo con barra o remo con mancuerna
+            - Remo en máquina sentado (Gironda)
+            - Pullover en polea alta
+
+            [PIERNAS / LEGS]
+            - Sentadillas libres con barra (Squats)
+            - Prensa de piernas (Leg Press)
+            - Extensiones de cuádriceps en máquina
+            - Curl de piernas acostado o sentado (Femorales)
+            - Zancadas con mancuernas (Lunges)
+            - Elevación de talones en máquina (Gemelos)
+
+            [HOMBROS / SHOULDERS]
+            - Press militar con barra o mancuernas sentado
+            - Elevaciones laterales con mancuernas
+            - Pájaros con mancuernas (Hombro posterior)
+
+            [BRAZOS / ARMS]
+            - Curl de bíceps con barra o mancuernas
+            - Curl de bíceps martillo
+            - Extensión de tríceps en polea alta (con cuerda o barra)
+            - Press francés para tríceps
+
+            [ABDOMEN Y CORE / ABS]
+            - Crunches abdominales en el suelo
+            - Plancha isométrica
+            - Elevaciones de piernas colgado
+
+            --- RUTINAS CLÁSICAS Y COMUNES ---
+
+            [RUTINA DE 3 DÍAS: CUERPO COMPLETO (FULL BODY)]
+            - Ideal para: Principiantes o personas con poco tiempo.
+            - Cómo se hace: Se entrena 3 días alternos (ej. Lunes, Miércoles, Viernes). En cada sesión se hace 1 ejercicio de pecho, 1 de espalda, 1 de pierna, 1 de hombro y 1 de brazo.
+
+            [RUTINA DE 4 DÍAS: TORSO / PIERNA]
+            - Ideal para: Nivel intermedio.
+            - Cómo se hace: 
+            * Lunes y Jueves: Solo ejercicios de Torso (Pecho, Espalda, Hombros, Brazos).
+            * Martes y Viernes: Solo ejercicios de Pierna y Abdomen.
+
+            [RUTINA DE 5 DÍAS: UN MÚSCULO POR DÍA (RUTINA WEIDER)]
+            - Ideal para: La rutina más tradicional y famosa de los gimnasios.
+            - Cómo se hace:
+            * Lunes: Pecho
+            * Martes: Espalda
+            * Miércoles: Piernas
+            * Jueves: Hombros
+            * Viernes: Brazos (Bíceps y Tríceps)
+
             
             Métodos de pago: Solo efectivo o transferencia los primeros 5 días del mes.
             -----------------------------------------------
@@ -161,7 +215,7 @@ class BotGymView(APIView):
             respuesta_ia.raise_for_status()
             data = respuesta_ia.json()
             texto_ia = data['choices'][0]['message']['content']
-            
+
         except requests.exceptions.HTTPError as e:
             texto_ia = f"Error con el servidor de IA: {str(e)}"
         except Exception as e:
@@ -174,6 +228,7 @@ class BotGymView(APIView):
             contenido=texto_ia,
             conversacion=conversacion
         )
+        conversacion.save()  
 
         return Response({
             "respuesta": texto_ia,
@@ -182,18 +237,26 @@ class BotGymView(APIView):
 
 
 class MisConversacionesView(ListAPIView):
-    """Lista las conversaciones del socio autenticado"""
-    permission_classes = [IsAuthenticated]
+    """Lista conversaciones: el socio ve solo las suyas, el personal ve todas"""
+    permission_classes = [IsAuthenticated]  # si esta autenticado puede conversar
     serializer_class = ConversacionListSerializer
 
     def get_queryset(self):
-        return Conversacion.objects.filter(usuario=self.request.user).order_by('-updated_at')
+        usuario = self.request.user
+        if hasattr(usuario, 'socio'):
+            # Si es  socio, solo ve sus conversaciones
+            return Conversacion.objects.filter(usuario=usuario).order_by('-updated_at')
+        # Es usuario puede ver  todas las conversaciones (consulta de historiales)
+        return Conversacion.objects.all().order_by('-updated_at')
 
 
 class DetalleConversacionView(RetrieveAPIView):
     """Ver los mensajes de una conversación específica"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]  
     serializer_class = ConversacionDetailSerializer
 
     def get_queryset(self):
-        return Conversacion.objects.filter(usuario=self.request.user)
+        usuario = self.request.user
+        if hasattr(usuario, 'socio'):
+            return Conversacion.objects.filter(usuario=usuario)
+        return Conversacion.objects.all()

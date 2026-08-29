@@ -1,7 +1,15 @@
 import uuid
 from django.db import models
+from django.conf import settings
 
 class Socio(models.Model):
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='socio',
+        null=True,
+        blank=True,
+    )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     nombre = models.CharField(max_length=60)
     apellido = models.CharField(max_length=60)

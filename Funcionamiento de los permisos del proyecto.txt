@@ -1,0 +1,8 @@
+Resumen de permisos
+
+Acción				Superusuario		Usuario (personal)	Socio
+-----------------------		------------		------------------	------
+CRUD completo de users		✅			Solo listar		❌
+CRUD de socios			✅			✅			❌
+Conversar con botgym		✅			✅			✅
+Consultar conversaciones	✅			✅			❌

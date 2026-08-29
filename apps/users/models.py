@@ -1,7 +1,7 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 
-# 1. El Manager: Le dice a Django cómo crear usuarios y superusuarios
+# El Manager, Le dice a Django cómo crear usuarios y superusuarios
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -22,7 +22,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True, max_length=255)
     nombre = models.CharField(max_length=60, blank=True)
     is_active = models.BooleanField(default=True) # Para poder desactivar usuarios
-    is_staff = models.BooleanField(default=False) # Si puede entrar al panel (aunque no lo usemos)
+    is_staff = models.BooleanField(default=False) 
 
     objects = CustomUserManager()
 
