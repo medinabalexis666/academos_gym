@@ -28,7 +28,7 @@ urlpatterns = [
     # Rutas de la aplicacion
     #path('admin/', admin.site.urls),
     path('api/', include('apps.users.urls')),
-    path('api/socios/', include('apps.socios.urls')),
+    path('api/', include('apps.socios.urls')),
     path('api/bot/', include('apps.botgym.urls')),
 
 ]
