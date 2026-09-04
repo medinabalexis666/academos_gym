@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import SocioViewSet
 
 router = DefaultRouter()
-router.register(r'socios', SocioViewSet, basename='socio')
+router.register(r'', SocioViewSet, basename='socio')
 
 urlpatterns = [
     path('', include(router.urls)),

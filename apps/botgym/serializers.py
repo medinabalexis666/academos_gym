@@ -5,7 +5,6 @@ from .models import Mensaje, Conversacion
 class MensajeSerializer(serializers.Serializer):
     """Para recibir preguntas del usuario"""
     mensaje = serializers.CharField(max_length=2000)
-    conversacion_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class MensajeReadSerializer(serializers.ModelSerializer):

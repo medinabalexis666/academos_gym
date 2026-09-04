@@ -3,9 +3,9 @@ from .views import BotGymView, MisConversacionesView, DetalleConversacionView
 
 urlpatterns = [
     # Endpoint principal del bot
-    path('preguntar/', BotGymView.as_view(), name='botgym_preguntar'),
+    path('conversar/', BotGymView.as_view(), name='Conversar_botgym'),
     
     # Gestión de conversaciones
-    path('conversaciones/', MisConversacionesView.as_view(), name='mis_conversaciones'),
-    path('conversaciones/<uuid:pk>/', DetalleConversacionView.as_view(), name='detalle_conversacion'),
+    path('consulta/', MisConversacionesView.as_view(), name='listado_conversaciones'),
+    path('consulta/<uuid:pk>/', DetalleConversacionView.as_view(), name='detalle_conversacion'),
 ]
