@@ -1,3 +1,4 @@
+
 Resumen de permisos
 
 Acción				Superusuario		Usuario (personal)	Socio
