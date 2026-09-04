@@ -18,15 +18,20 @@ class MensajeReadSerializer(serializers.ModelSerializer):
 
 class ConversacionListSerializer(serializers.ModelSerializer):
     """Lista resumida de conversaciones"""
+    usuario_nombre = serializers.CharField(source='usuario.nombre', read_only=True)
+    usuario_email = serializers.CharField(source='usuario.email', read_only=True)
+
     class Meta:
         model = Conversacion
-        fields = ['id', 'titulo', 'created_at', 'updated_at']
+        fields = ['id', 'titulo', 'usuario_nombre', 'usuario_email', 'created_at', 'updated_at']
 
 
 class ConversacionDetailSerializer(serializers.ModelSerializer):
     """Detalle con todos los mensajes"""
     mensajes = MensajeReadSerializer(many=True, read_only=True)
+    usuario_nombre = serializers.CharField(source='usuario.nombre', read_only=True)
+    usuario_email = serializers.CharField(source='usuario.email', read_only=True)
 
     class Meta:
         model = Conversacion
-        fields = ['id', 'titulo', 'created_at', 'updated_at', 'mensajes']
+        fields = ['id', 'titulo', 'usuario_nombre', 'usuario_email', 'created_at', 'updated_at', 'mensajes']

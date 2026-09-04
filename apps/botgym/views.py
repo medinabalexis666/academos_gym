@@ -78,31 +78,42 @@ class BotGymView(APIView):
         ]
 
         datos_socio = ""
+        # --- Datos de la persona que conversa ---
+        # El nombre SIEMPRE se toma del usuario autenticado (JWT), nunca se le pregunta al bot.
         if hasattr(usuario, 'socio'):
             socio = usuario.socio
-            datos_socio = f"""
-            --- DATOS DEL SOCIO QUE HABLA CONTIGO ---
-            - Nombre: {socio.nombre} {socio.apellido}
-            - Email: {socio.email}
+            nombre_persona = f"{socio.nombre} {socio.apellido}".strip()
+        else:
+            # Personal administrativo o superusuario: usamos el nombre de su cuenta
+            nombre_persona = usuario.nombre.strip() or usuario.email
+
+        datos_persona = f"""
+            --- DATOS DE LA PERSONA QUE HABLA CONTIGO ---
+            - Nombre: {nombre_persona}
+            - Email: {usuario.email}"""
+
+        if hasattr(usuario, 'socio'):
+            socio = usuario.socio
+            datos_persona += f"""
             - Edad: {socio.edad} años
             - Género: {socio.get_genero_display()}"""
             if socio.peso:
-                datos_socio += f"\n- Peso: {socio.peso} kg"
+                datos_persona += f"\n- Peso: {socio.peso} kg"
             if socio.altura:
-                datos_socio += f"\n- Altura: {socio.altura} cm"
+                datos_persona += f"\n- Altura: {socio.altura} cm"
             if socio.objetivo:
-                datos_socio += f"\n- Objetivo: {socio.get_objetivo_display()}"
+                datos_persona += f"\n- Objetivo: {socio.get_objetivo_display()}"
             if socio.nivel_actividad:
-                datos_socio += f"\n- Nivel: {socio.get_nivel_actividad_display()}"
+                datos_persona += f"\n- Nivel: {socio.get_nivel_actividad_display()}"
             if socio.condiciones_medicas:
-                datos_socio += f"\n- Condiciones médicas: {socio.condiciones_medicas}"
+                datos_persona += f"\n- Condiciones médicas: {socio.condiciones_medicas}"
 
         prompt_sistema = {
             "role": "system",
             "content": f"""
             Eres 'BotGym', asistente del gimnasio Academos. Sé muy breve (máximo 3 frases).
 
-            {datos_socio}
+            {datos_persona}
 
             --- BASE DE CONOCIMIENTO DEL GIMNASIO (RAG) ---
             Horarios:
@@ -180,8 +191,8 @@ class BotGymView(APIView):
             
             REGLAS ESTRICTAS:
             1. Si preguntan por HORARIOS o PRECIOS, usa SOLO la info de arriba. NUNCA inventes.
-            2. SIEMPRE saluda al socio por su NOMBRE al inicio de tu respuesta.
-            3. Usa los DATOS DEL SOCIO (edad, peso, objetivo, nivel) para personalizar.
+            2. SIEMPRE saluda a la persona por su NOMBRE al inicio de tu respuesta. Ese nombre ya te lo di arriba: NUNCA lo preguntes ni pidas datos de registro.
+            3. Usa los DATOS DE LA PERSONA (edad, peso, objetivo, nivel) para personalizar cuando existan.
             4. Si tiene condiciones médicas, TEN CUIDADO al recomendar ejercicios.
             5. Si pregunta por rutinas, adapta a su OBJETIVO y NIVEL DE ACTIVIDAD.
             6. Responde SIEMPRE en español.
@@ -245,9 +256,9 @@ class MisConversacionesView(ListAPIView):
         usuario = self.request.user
         if hasattr(usuario, 'socio'):
             # Si es  socio, solo ve sus conversaciones
-            return Conversacion.objects.filter(usuario=usuario).order_by('-updated_at')
+            return Conversacion.objects.filter(usuario=usuario).select_related('usuario').order_by('-updated_at')
         # Es usuario puede ver  todas las conversaciones (consulta de historiales)
-        return Conversacion.objects.all().order_by('-updated_at')
+        return Conversacion.objects.all().select_related('usuario').order_by('-updated_at')
 
 
 class DetalleConversacionView(RetrieveAPIView):
@@ -258,5 +269,5 @@ class DetalleConversacionView(RetrieveAPIView):
     def get_queryset(self):
         usuario = self.request.user
         if hasattr(usuario, 'socio'):
-            return Conversacion.objects.filter(usuario=usuario)
-        return Conversacion.objects.all()
+            return Conversacion.objects.filter(usuario=usuario).select_related('usuario')
+        return Conversacion.objects.all().select_related('usuario')
